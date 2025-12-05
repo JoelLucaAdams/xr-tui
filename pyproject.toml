@@ -13,6 +13,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "fsspec[s3]>=2025.10.0",
     "scipy>=1.13.1",
     "textual>=6.7.1",
     "textual-plotext>=1.0.1",
