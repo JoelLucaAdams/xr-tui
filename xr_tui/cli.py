@@ -18,7 +18,7 @@ class XarrayTUI(App):
     def __init__(self, file: str, **kwargs) -> None:
         super().__init__(**kwargs)
         self.file = file
-        self.dataset = xr.open_datatree(file)
+        self.dataset = xr.open_datatree(file, chunks=None, create_default_indexes=False)
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
