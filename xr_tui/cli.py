@@ -4,10 +4,16 @@ from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header, Tree
 
 
-class XarrayTUIApp(App):
-    """A Textual app to manage stopwatches."""
+class XarrayTUI(App):
+    """A Textual app to view xarray Datasets."""
 
-    BINDINGS = [("d", "toggle_dark", "Toggle dark mode"), ("q", "quit_app", "Quit")]
+    BINDINGS = [
+        ("q", "quit_app", "Quit"),
+        ("t", "toggle_expand", "Toggle expand/collapse of current node"),
+        ("e", "expand_all", "Expand all nodes"),
+        ("c", "collapse_all", "Collapse all nodes"),
+        ("d", "toggle_dark", "Toggle dark mode"),
+    ]
 
     def __init__(self, file: str, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -22,46 +28,59 @@ class XarrayTUIApp(App):
         tree: Tree[str] = Tree(f"xarray Dataset: {self.file}")
         tree.root.expand()
 
-        name = "summary"
-        group = self.dataset[name]
+        for group_name in self.dataset.groups:
+            group = self.dataset[group_name]
 
-        num_vars = len(group.data_vars)
-        group_node = tree.root.add(f"Group: {name} (Data Variables: {num_vars})")
-        group_node.expand()
+            num_vars = len(group.data_vars)
+            num_coords = len(group.coords)
+            group_node = tree.root.add(
+                f"Group: {group_name} (Data Variables: {num_vars}, Coordinates: {num_coords})"
+            )
+            group_node.expand()
 
-        coords_node = group_node.add("Coordinates")
-        coords_node.expand()
+            dims_node = group_node.add("Dimensions")
+            for dim_name, dim_size in group.dims.items():
+                dims_node.add_leaf(f"{dim_name}: {dim_size}")
+            dims_node.expand()
 
-        for coord in group.coords.keys():
-            coord_node = coords_node.add(coord)
-            coord_node.add_leaf(f"Dimensions: {group[coord].dims}")
-            coord_node.add_leaf(f"Shape: {group[coord].shape}")
-            coord_node.add_leaf(f"Data Type: {group[coord].dtype}")
+            coords_node = group_node.add("Coordinates")
+            coords_node.expand()
 
-            num_attributes = len(group[coord].attrs)
-            attr_node = coord_node.add(f"Attributes ({num_attributes})")
-            for attr, value in group[coord].attrs.items():
-                attr_node.add_leaf(f"{attr}: {value}")
+            for coord_name in group.coords.keys():
+                self._add_var_node(coords_node, group[coord_name])
 
-            coord_node.expand()
+            data_vars_node = group_node.add("Data Variables")
+            data_vars_node.expand()
 
-        data_vars_node = group_node.add("Data Variables")
-        data_vars_node.expand()
-
-        for var in group.data_vars.keys():
-            var_node = data_vars_node.add(var)
-            var_node.add_leaf(f"Dimensions: {group[var].dims}")
-            var_node.add_leaf(f"Shape: {group[var].shape}")
-            var_node.add_leaf(f"Data Type: {group[var].dtype}")
-
-            num_attributes = len(group[var].attrs)
-            attr_node = var_node.add(f"Attributes ({num_attributes})")
-            for attr, value in group[var].attrs.items():
-                attr_node.add_leaf(f"{attr}: {value}")
-
-            var_node.expand()
+            for var_name in group.data_vars.keys():
+                self._add_var_node(data_vars_node, group[var_name])
 
         yield tree
+
+    def _add_var_node(self, parent_node: Tree, var: xr.DataArray) -> None:
+        """Helper method to add a variable node to the tree."""
+        var_node = parent_node.add(f"{var.name}: {var.dims} {var.dtype} {var.nbytes}")
+
+        num_attributes = len(var.attrs)
+        attr_node = var_node.add(f"Attributes ({num_attributes})")
+        for attr, value in var.attrs.items():
+            attr_node.add_leaf(f"{attr}: {value}")
+
+    def action_expand_all(self) -> None:
+        """An action to expand all tree nodes."""
+        self.query_one(Tree).root.expand_all()
+
+    def action_collapse_all(self) -> None:
+        """An action to collapse all tree nodes."""
+        self.query_one(Tree).root.collapse_all()
+
+    def action_toggle_expand(self) -> None:
+        """An action to collapse all tree nodes."""
+        current_node = self.query_one(Tree).cursor_node
+        if current_node.is_collapsed:
+            current_node.expand()
+        else:
+            current_node.collapse()
 
     def action_quit_app(self) -> None:
         self.exit()
@@ -80,7 +99,7 @@ def main():
     parser.add_argument("file", type=str, help="Path to the xarray Dataset file.")
     args = parser.parse_args()
 
-    app = XarrayTUIApp(args.file)
+    app = XarrayTUI(args.file)
     app.run()
 
 
