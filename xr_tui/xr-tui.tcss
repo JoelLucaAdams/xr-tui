@@ -1,0 +1,31 @@
+PlotScreen {
+    align: center middle;
+    background: rgba(0, 0, 0, 0);
+}
+
+StatisticsScreen {
+    align: center middle;
+    background: rgba(0, 0, 0, 0);
+}
+
+#stats-container {
+    grid-size: 2;
+    grid-gutter: 1 2;
+    grid-rows: 1fr 3;
+    padding: 0 1;
+    width: 80%;
+    height: 80%;
+    border: thick $background 80%;
+    background: $surface;
+}
+
+#plot-widget {
+    grid-size: 2;
+    grid-gutter: 1 2;
+    grid-rows: 1fr 3;
+    padding: 0 1;
+    width: 80%;
+    height: 80%;
+    border: thick $background 80%;
+    background: $surface;
+}
