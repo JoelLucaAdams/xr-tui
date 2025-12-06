@@ -1,25 +1,23 @@
+"""A Textual TUI for exploring netcdf and zarr datasets."""
+
 import argparse
 import os
 import time
+
 import numpy as np
 import xarray as xr
-from textual.app import App, ComposeResult
-from textual.widgets import (
-    Footer,
-    Header,
-    Tree,
-    DataTable,
-    RadioButton,
-    RadioSet,
-)
 from textual import on
+from textual.app import App, ComposeResult
 from textual.containers import Grid, Horizontal, Vertical
 from textual.screen import Screen
-from textual_slider import Slider
+from textual.widgets import DataTable, Footer, Header, RadioButton, RadioSet, Tree
 from textual_plotext import PlotextPlot
+from textual_slider import Slider
 
 
 class StatisticsScreen(Screen):
+    """A screen to display statistics of a variable."""
+
     BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
 
     def __init__(self, variable: xr.DataArray, **kwargs) -> None:
@@ -85,6 +83,8 @@ class StatisticsScreen(Screen):
 
 
 class PlotScreen(Screen):
+    """A screen to display plots of a 1D, 2D, and ND variables."""
+
     BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
 
     def __init__(self, variable: xr.DataArray, **kwargs) -> None:
@@ -135,6 +135,7 @@ class PlotScreen(Screen):
         yield plot_widget
 
     def create_slice_sliders(self, dim1: int = 0, dim2: int = 1) -> None:
+        """Create sliders for slicing dimensions other than dim1 and dim2."""
         slice_inputs = []
         dims = list(self.variable.dims)
         for dim in dims:
@@ -155,7 +156,8 @@ class PlotScreen(Screen):
         return slice_inputs
 
     @on(Slider.Changed)
-    async def on_slider_changed_normal(self, event: Slider.Changed) -> None:
+    async def on_slider_changed_normal(self, _event: Slider.Changed) -> None:
+        """Handle slider change events to update the plot."""
         slicers = self.query_one("#slice-inputs-container")
         slicers = slicers.children
         slice_positions = {
@@ -183,7 +185,8 @@ class PlotScreen(Screen):
                 return i
         return 0
 
-    async def on_radio_set_changed(self, message: RadioSet.Changed):
+    async def on_radio_set_changed(self, _message: RadioSet.Changed):
+        """Handle radio button changes to update the plot."""
         dim1_group = self.query_one("#x-dim-select-1")
         dim2_group = self.query_one("#y-dim-select-2")
 
@@ -274,12 +277,12 @@ class PlotScreen(Screen):
         return plot_widget
 
     def _plot_variable_nd(
-        self, dim1: int = 0, dim2: int = 1, slice_positions: dict = {}
+        self, dim1: int = 0, dim2: int = 1, slice_positions: dict = None
     ) -> PlotextPlot:
+        if slice_positions is None:
+            slice_positions = {}
+
         variable = self.variable
-        variable = variable.dropna(
-            dim="major_radius", how="all"
-        )  # Example of dropping NaNs along a dimension
 
         # Get all dimension names
         dims = list(variable.dims)
