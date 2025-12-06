@@ -1,13 +1,20 @@
 import argparse
-from functools import partial
 from typing import Iterable
 import numpy as np
 import xarray as xr
 from textual.app import App, ComposeResult, SystemCommand
-from textual.widgets import Footer, Header, Tree, Static, DataTable
-from textual.containers import Grid
+from textual.widgets import (
+    Footer,
+    Header,
+    Tree,
+    DataTable,
+    RadioButton,
+    RadioSet,
+)
+from textual import on
+from textual.containers import Grid, Horizontal, Vertical
 from textual.screen import Screen
-from textual.command import Hit, Hits, Provider
+from textual_slider import Slider
 from textual_plotext import PlotextPlot
 
 
@@ -17,6 +24,7 @@ class StatisticsScreen(Screen):
     def __init__(self, variable: xr.DataArray, **kwargs) -> None:
         super().__init__(**kwargs)
         self.variable = variable
+        self.n_bins = 100
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the screen."""
@@ -25,9 +33,12 @@ class StatisticsScreen(Screen):
         data = data[~np.isnan(data)]  # Remove NaN values
 
         plot_widget = PlotextPlot(id="hist-widget")
-        plot_widget.plt.hist(data, bins=100)
+        plot_widget.plt.hist(data, bins=self.n_bins)
+        plot_widget.plt.title(f"Histogram of {self.variable.name}")
+        plot_widget.plt.xlabel("Value")
+        plot_widget.plt.ylabel("Frequency")
 
-        table = DataTable(id="stats-grid")
+        table = DataTable(id="stats-table")
         table.add_column("Statistic")
         table.add_column("Value")
 
@@ -39,15 +50,33 @@ class StatisticsScreen(Screen):
     def _compute_statistics(self, variable: xr.DataArray) -> dict:
         """Compute basic statistics for the variable."""
         data = variable.values.flatten()
+
+        nan_count = np.isnan(data).sum()
+        inf_count = np.isinf(data).sum()
+        pct_nan = (nan_count / data.size) * 100
+        pct_inf = (inf_count / data.size) * 100
+
         data = data[~np.isnan(data)]  # Remove NaN values
+
+        pct_25 = np.percentile(data, 25)
+        pct_50 = np.percentile(data, 50)
+        pct_75 = np.percentile(data, 75)
 
         stats = {
             "Mean": data.mean(),
             "Median": np.median(data),
             "Standard Deviation": data.std(),
+            "Range": data.max() - data.min(),
             "Minimum": data.min(),
+            "25%": pct_25,
+            "50%": pct_50,
+            "75%": pct_75,
             "Maximum": data.max(),
             "Count": len(data),
+            "NaN Count": nan_count,
+            "NaN %": pct_nan,
+            "Inf Count": inf_count,
+            "Inf %": pct_inf,
         }
         return stats
 
@@ -55,58 +84,255 @@ class StatisticsScreen(Screen):
 class PlotScreen(Screen):
     BINDINGS = [("escape", "app.pop_screen", "Pop screen")]
 
-    def __init__(
-        self, variable: xr.DataArray, plot_type: str = "line", **kwargs
-    ) -> None:
+    def __init__(self, variable: xr.DataArray, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.plot_type = plot_type
         self.variable = variable
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the screen."""
-        if self.plot_type == "line":
+
+        if len(self.variable.dims) == 1:
             plot_widget = self._plot_variable_1d()
-        elif self.plot_type == "heatmap":
+        elif len(self.variable.dims) == 2:
             plot_widget = self._plot_variable_2d()
         else:
-            return
+            dims = list(self.variable.dims)
+
+            dim1 = 0
+            dim2 = 1
+
+            r1_buttons = []
+            for i, dim in enumerate(dims):
+                disabled = i == dim2
+                button = RadioButton(dim, value=i == dim1, disabled=disabled)
+                r1_buttons.append(button)
+
+            r2_buttons = []
+            for i, dim in enumerate(dims):
+                disabled = i == dim1
+                button = RadioButton(dim, value=i == dim2, disabled=disabled)
+                r2_buttons.append(button)
+
+            r1 = RadioSet(*r1_buttons, id="x-dim-select-1")
+            r1.border_title = "Y Dimension"
+            r2 = RadioSet(*r2_buttons, id="y-dim-select-2")
+            r2.border_title = "x Dimension"
+
+            slice_inputs = self.create_slice_sliders(dim1, dim2)
+
+            plot_widget = self._plot_variable_nd()
+            plot_widget = Vertical(
+                Horizontal(r1, r2, id="dim-select-container"),
+                slice_inputs,
+                plot_widget,
+                id="plot-container",
+            )
+            plot_widget.border_title = f"[bold]Slice Plot of {self.variable.name}[/]"
 
         yield plot_widget
 
+    def create_slice_sliders(self, dim1: int = 0, dim2: int = 1) -> None:
+        slice_inputs = []
+        dims = list(self.variable.dims)
+        for dim in dims:
+            if dim not in [dims[dim1], dims[dim2]]:
+                dim_size = self.variable.sizes[dim]
+                slider = Slider(
+                    0,
+                    dim_size - 1,
+                    step=1,
+                    id=f"slice-{dim}",
+                    name=dim,
+                    value=dim_size // 2,
+                )
+                slider.border_title = f"Slice Position for {dim}"
+                slice_inputs.append(slider)
+
+        slice_inputs = Horizontal(*slice_inputs, id="slice-inputs-container")
+        return slice_inputs
+
+    @on(Slider.Changed)
+    async def on_slider_changed_normal(self, event: Slider.Changed) -> None:
+        slicers = self.query_one("#slice-inputs-container")
+        slicers = slicers.children
+        slice_positions = {
+            slicer.name: slicer.value
+            for slicer in slicers
+            if isinstance(slicer, Slider)
+        }
+
+        dim1_group = self.query_one("#x-dim-select-1")
+        dim2_group = self.query_one("#y-dim-select-2")
+
+        dim1 = self._get_selected_dim(dim1_group)
+        dim2 = self._get_selected_dim(dim2_group)
+
+        new_plot = self._plot_variable_nd(dim1, dim2, slice_positions)
+        plot_container = self.query_one("#plot-container")
+
+        # Swap out the old plot with the new one
+        await plot_container.children[-1].remove()
+        await plot_container.mount(new_plot)
+
+    def _get_selected_dim(self, radio_set: RadioSet) -> int:
+        for i, radio in enumerate(radio_set.children):
+            if isinstance(radio, RadioButton) and radio.value:
+                return i
+        return 0
+
+    async def on_radio_set_changed(self, message: RadioSet.Changed):
+        dim1_group = self.query_one("#x-dim-select-1")
+        dim2_group = self.query_one("#y-dim-select-2")
+
+        dim1 = self._get_selected_dim(dim1_group)
+        dim2 = self._get_selected_dim(dim2_group)
+
+        for i, radio in enumerate(dim1_group.children):
+            if isinstance(radio, RadioButton):
+                radio.disabled = i == dim2
+
+        for i, radio in enumerate(dim2_group.children):
+            if isinstance(radio, RadioButton):
+                radio.disabled = i == dim1
+
+        dim1_group.refresh()
+        dim2_group.refresh()
+
+        slice_inputs = self.create_slice_sliders(dim1, dim2)
+
+        # Re-plot with new dimensions
+        new_plot = self._plot_variable_nd(dim1, dim2)
+        plot_container = self.query_one("#plot-container")
+        await plot_container.children[-1].remove()
+        await plot_container.children[-1].remove()
+        await plot_container.mount(slice_inputs)
+        await plot_container.mount(new_plot)
+
     def _plot_variable_1d(self):
         variable = self.variable
+        x_dim_name = variable.dims[0]
 
-        # Assume variable is 1D
-        y_data = variable.values
-
-        if len(variable.coords) == 0:
-            x_data = range(len(y_data))
+        if x_dim_name in variable.coords:
+            x_coords = variable.coords[x_dim_name].values
         else:
-            x_data = variable[variable.dims[0]].values
+            x_coords = np.arange(variable.shape[0])
 
-        plot_widget = PlotextPlot(id="plot-widget")
-        plot_widget.plt.plot(x_data, y_data, label="Array Data")
-        plot_widget.plt.xlabel(variable.dims[0])
-        plot_widget.plt.ylabel(f"{variable.name}")
+        y_values = variable.values
+        y_values = np.nan_to_num(y_values, nan=0.0)
 
+        plot_widget = PlotextPlot(id="plot-container")
+        plot_widget.plt.plot(x_coords.tolist(), y_values.tolist())
+        xunit = variable.coords[x_dim_name].attrs.get("units", "")
+        xlabel = f"{x_dim_name} ({xunit})" if xunit else x_dim_name
+        plot_widget.plt.xlabel(xlabel)
+        plot_widget.plt.ylabel(variable.name)
+        plot_widget.plt.title(f"1D Plot of {variable.name}")
         return plot_widget
 
     def _plot_variable_2d(self):
         variable = self.variable
 
-        # Assume variable is 2D
-        y_data = variable.values
+        x_dim_name = variable.dims[1]
+        y_dim_name = variable.dims[0]
 
-        if len(variable.coords) < 2:
-            x_data = range(y_data.shape[1])
-            y_coords = range(y_data.shape[0])
+        z = variable.values
+        z = np.nan_to_num(z, nan=0.0)
+
+        # Get coordinate values
+        if x_dim_name in variable.coords:
+            x_coords = variable.coords[x_dim_name].values
         else:
-            x_data = variable[variable.dims[1]].values
-            y_coords = variable[variable.dims[0]].values
+            x_coords = np.arange(z.shape[1])
+
+        if y_dim_name in variable.coords:
+            y_coords = variable.coords[y_dim_name].values
+        else:
+            y_coords = np.arange(z.shape[0])
+
+        plot_widget = PlotextPlot(id="plot-container")
+        plot_widget.plt.matrix_plot(z.tolist())
+        plot_widget.plt.xticks(
+            np.arange(len(x_coords)), labels=[f"{val:.4f}" for val in x_coords]
+        )
+        plot_widget.plt.yticks(
+            np.arange(len(y_coords)), labels=[f"{val:.4f}" for val in y_coords]
+        )
+
+        xunit = variable.coords[x_dim_name].attrs.get("units", "")
+        yunit = variable.coords[y_dim_name].attrs.get("units", "")
+
+        xlabel = f"{x_dim_name} ({xunit})" if xunit else x_dim_name
+        ylabel = f"{y_dim_name} ({yunit})" if yunit else y_dim_name
+        plot_widget.plt.xlabel(xlabel)
+        plot_widget.plt.ylabel(ylabel)
+
+        plot_widget.plt.title(f"2D Plot of {variable.name}")
+
+        return plot_widget
+
+    def _plot_variable_nd(
+        self, dim1: int = 0, dim2: int = 1, slice_positions: dict = {}
+    ) -> PlotextPlot:
+        variable = self.variable
+        variable = variable.dropna(
+            dim="major_radius", how="all"
+        )  # Example of dropping NaNs along a dimension
+
+        # Get all dimension names
+        dims = list(variable.dims)
+
+        # Default to last two dimensions for x and y
+        y_dim_name = dims[dim1] if len(dims) >= 2 else dims[0]
+        x_dim_name = dims[dim2]
+
+        # Get the indices for other dimensions (set to middle slice)
+        slice_dict = {}
+        for dim in dims:
+            if dim not in [x_dim_name, y_dim_name]:
+                if dim in slice_positions:
+                    slice_dict[dim] = slice_positions[dim]
+                else:
+                    dim_size = variable.sizes[dim]
+                    slice_dict[dim] = dim_size // 2
+
+        # Slice the variable to get 2D data
+        sliced_var = variable.isel(slice_dict)
+
+        z = sliced_var.values
+        z = np.nan_to_num(z, nan=0.0)
+
+        # Get coordinate values
+        if x_dim_name in sliced_var.coords:
+            x_coords = sliced_var.coords[x_dim_name].values
+        else:
+            x_coords = np.arange(z.shape[1])
+
+        if y_dim_name in sliced_var.coords:
+            y_coords = sliced_var.coords[y_dim_name].values
+        else:
+            y_coords = np.arange(z.shape[0])
 
         plot_widget = PlotextPlot(id="plot-widget")
-        plot_widget.plt.heatmap(x_data, y_coords, y_data)
+        plot_widget.plt.matrix_plot(z.tolist())
+        plot_widget.plt.xticks(
+            np.arange(len(x_coords)), labels=[f"{val:.4f}" for val in x_coords]
+        )
+        plot_widget.plt.yticks(
+            np.arange(len(y_coords)), labels=[f"{val:.4f}" for val in y_coords]
+        )
 
+        xunit = sliced_var.coords[x_dim_name].attrs.get("units", "")
+        yunit = sliced_var.coords[y_dim_name].attrs.get("units", "")
+
+        xlabel = f"{x_dim_name} ({xunit})" if xunit else x_dim_name
+        ylabel = f"{y_dim_name} ({yunit})" if yunit else y_dim_name
+        plot_widget.plt.xlabel(xlabel)
+        plot_widget.plt.ylabel(ylabel)
+
+        # Add info about sliced dimensions to title
+        slice_info = ", ".join([f"{dim}={idx}" for dim, idx in slice_dict.items()])
+        title = f"{variable.name} ({slice_info})" if slice_info else f"{variable.name}"
+        plot_widget.plt.title(title)
         return plot_widget
 
 
@@ -133,7 +359,9 @@ class XarrayTUI(App):
         self.title = "xr-tui"
         self.theme = "monokai"
         self.file = file
-        self.dataset = xr.open_datatree(file, chunks=None, create_default_indexes=False)
+        self.dataset = xr.open_datatree(
+            file, chunks=None, create_default_indexes=False, engine="zarr"
+        )
 
     def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
         yield from super().get_system_commands(screen)
