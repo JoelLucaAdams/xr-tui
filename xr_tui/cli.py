@@ -1,8 +1,9 @@
 import argparse
-from typing import Iterable
+import os
+import time
 import numpy as np
 import xarray as xr
-from textual.app import App, ComposeResult, SystemCommand
+from textual.app import App, ComposeResult
 from textual.widgets import (
     Footer,
     Header,
@@ -45,7 +46,9 @@ class StatisticsScreen(Screen):
         for stat_name, stat_value in stats.items():
             table.add_row(stat_name, f"{stat_value:.4f}")
 
-        yield Grid(plot_widget, table, id="stats-container")
+        modal = Grid(plot_widget, table, id="stats-container")
+        modal.border_title = f"[bold]Statistics for {self.variable.name}[/]"
+        yield modal
 
     def _compute_statistics(self, variable: xr.DataArray) -> dict:
         """Compute basic statistics for the variable."""
@@ -346,12 +349,11 @@ class XarrayTUI(App):
     BINDINGS = [
         ("q", "quit_app", "Quit"),
         ("escape", "quit_app", "Quit"),
-        ("t", "toggle_expand", "Toggle expand/collapse of current node"),
         ("e", "expand_all", "Expand all nodes"),
         ("c", "collapse_all", "Collapse all nodes"),
-        ("d", "toggle_dark", "Toggle dark mode"),
         ("p", "plot_variable", "Plot variable"),
         ("s", "show_statistics", "Show statistics"),
+        ("d", "toggle_dark", "Toggle dark mode"),
     ]
 
     def __init__(self, file: str, **kwargs) -> None:
@@ -359,13 +361,36 @@ class XarrayTUI(App):
         self.title = "xr-tui"
         self.theme = "monokai"
         self.file = file
+
+        self.file_info = self._get_file_info(file)
+
         self.dataset = xr.open_datatree(
             file, chunks=None, create_default_indexes=False, engine="zarr"
         )
 
-    def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
-        yield from super().get_system_commands(screen)
-        yield SystemCommand("Bell", "Ring the bell", self.bell)
+    def _get_file_info(self, file: str) -> None:
+        """Get basic info about the file such as size and format."""
+
+        if os.path.isdir(file):
+            file_size = sum(
+                os.path.getsize(os.path.join(dirpath, filename))
+                for dirpath, dirnames, filenames in os.walk(file)
+                for filename in filenames
+            )
+        else:
+            file_size = os.path.getsize(file)
+        file_type = os.path.splitext(file)[1].lower()
+        permissions = oct(os.stat(file).st_mode)[-3:]
+        created_time = time.ctime(os.path.getctime(file))
+        modified_time = time.ctime(os.path.getmtime(file))
+        file_info = {
+            "File Size": self._convert_nbytes_to_readable(file_size),
+            "File Type": file_type,
+            "Permissions": permissions,
+            "Created Time": created_time,
+            "Modified Time": modified_time,
+        }
+        return file_info
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -374,6 +399,11 @@ class XarrayTUI(App):
 
         tree: Tree[str] = Tree(f"xarray Dataset: [bold]{self.file} [/bold]")
         tree.root.expand()
+        # add file info as first child
+        file_info_node = tree.root.add("File Information")
+        file_info_node.expand()
+        for key, value in self.file_info.items():
+            file_info_node.add_leaf(f"[yellow]{key}[/]: {value}")
 
         def add_group_node(parent_node: Tree, group, group_name: str = "") -> None:
             """Recursively add group nodes to the tree."""
@@ -478,15 +508,8 @@ class XarrayTUI(App):
         """An action to collapse all tree nodes."""
         self.query_one(Tree).root.collapse_all()
 
-    def action_toggle_expand(self) -> None:
-        """An action to collapse all tree nodes."""
-        current_node = self.query_one(Tree).cursor_node
-        if current_node.is_collapsed:
-            current_node.expand()
-        else:
-            current_node.collapse()
-
     def action_quit_app(self) -> None:
+        """An action to quit the app."""
         self.exit()
 
     def action_toggle_dark(self) -> None:
