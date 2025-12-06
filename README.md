@@ -1,25 +1,31 @@
 # xr-tui
 
+[![GitHub stars](https://img.shields.io/github/stars/samueljackson92/xr-tui.svg)](https://github.com/samueljackson92/xr-tui/stargazers)
+[![GitHubIssues](https://img.shields.io/badge/issue_tracking-github-blue.svg)](https://github.com/samueljackson92/xr-tui/issues)
+[![GitTutorial](https://img.shields.io/badge/PR-Welcome-%23FF8300.svg?)](https://github.com/samueljackson92/xr-tui/pulls)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![linting: pylint](https://img.shields.io/badge/linting-pylint-yellowgreen)](https://github.com/pylint-dev/pylint)
+
 xr-tui is an interactive terminal user interface (TUI) for exploring and visualizing xarray Datasets and DataArrays. It leverages the power of xarray for handling multi-dimensional arrays and provides a user-friendly interface for data exploration directly in the terminal.
-
-## Installation
-You can install xr-tui via pip:
-
-```bash
-pip install xr-tui
-```
-
-Or as a uv tool:
-
-```bash
-uv tool install xr-tui
-```
 
 ## Features
 - Interactive navigation through xarray Datasets and DataArrays.
 - Visualization of 1D and 2D data using plotext for terminal-based plotting.
 - Support for slicing multi-dimensional data.
 - Easy-to-use command-line interface.
+
+## Installation
+You can install xr-tui via pip:
+
+```bash
+pipx install git+https://github.com/samueljackson92/xr-tui.git 
+```
+
+Or as a uv tool:
+
+```bash
+uv tool install git+https://github.com/samueljackson92/xr-tui.git 
+```
 
 ## Usage
 To start xr-tui, simply run the following command in your terminal:
@@ -30,7 +36,7 @@ xr data.nc
 
 This will launch the TUI, allowing you to explore the contents of `data.nc`.
 
-## Key Commands
+## Key Command Reference
 
 | Key | Action |
 |-----|--------|
