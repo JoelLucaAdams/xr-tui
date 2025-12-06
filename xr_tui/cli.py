@@ -351,7 +351,6 @@ class XarrayTUI(App):
 
     BINDINGS = [
         ("q", "quit_app", "Quit"),
-        ("escape", "quit_app", "Quit"),
         ("e", "expand_all", "Expand all nodes"),
         ("c", "collapse_all", "Collapse all nodes"),
         ("p", "plot_variable", "Plot variable"),
