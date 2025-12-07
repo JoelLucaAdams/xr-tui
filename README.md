@@ -13,6 +13,8 @@ xr-tui is an interactive terminal user interface (TUI) for exploring and visuali
 - Visualization of 1D and 2D data using plotext for terminal-based plotting.
 - Support for slicing multi-dimensional data.
 - Easy-to-use command-line interface.
+- Displays dataset statistics and metadata.
+- Handles HDF5 files not formatted as xarray datasets.
 
 ## Installation
 You can install xr-tui via pip:
@@ -35,6 +37,21 @@ xr data.nc
 ```
 
 This will launch the TUI, allowing you to explore the contents of `data.nc`.
+
+xr-tui supports various file formats compatible with xarray, including NetCDF, Zarr, and HDF5.
+
+You can also specify a particular group within a file to load:
+
+```bash
+xr data.nc --group summary
+```
+
+xr-tui also works with remote datasets accessible via HTTP:
+
+```bash
+xr http://example.com/data.zarr
+```
+
 
 ## Key Command Reference
 
