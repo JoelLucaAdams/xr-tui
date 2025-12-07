@@ -1,5 +1,6 @@
 # xr-tui
 
+[![CI](https://github.com/samueljackson92/xr-tui/workflows/Lint/badge.svg)](https://github.com/samueljackson92/xr-tui/actions)
 [![GitHub stars](https://img.shields.io/github/stars/samueljackson92/xr-tui.svg)](https://github.com/samueljackson92/xr-tui/stargazers)
 [![GitHubIssues](https://img.shields.io/badge/issue_tracking-github-blue.svg)](https://github.com/samueljackson92/xr-tui/issues)
 [![GitTutorial](https://img.shields.io/badge/PR-Welcome-%23FF8300.svg?)](https://github.com/samueljackson92/xr-tui/pulls)
@@ -7,6 +8,8 @@
 [![linting: pylint](https://img.shields.io/badge/linting-pylint-yellowgreen)](https://github.com/pylint-dev/pylint)
 
 xr-tui is an interactive terminal user interface (TUI) for exploring and visualizing xarray Datasets and DataArrays. It leverages the power of xarray for handling multi-dimensional arrays and provides a user-friendly interface for data exploration directly in the terminal.
+
+![](demo.gif)
 
 ## Features
 - Interactive navigation through xarray Datasets and DataArrays.
