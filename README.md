@@ -23,13 +23,13 @@ xr-tui is an interactive terminal user interface (TUI) for exploring and visuali
 You can install xr-tui via pip:
 
 ```bash
-pipx install git+https://github.com/samueljackson92/xr-tui.git 
+pipx install xr-tui
 ```
 
 Or as a uv tool:
 
 ```bash
-uv tool install git+https://github.com/samueljackson92/xr-tui.git 
+uv tool install xr-tui
 ```
 
 ## Usage

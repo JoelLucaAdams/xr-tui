@@ -33,7 +33,7 @@ StatisticsScreen {
     width: 80%;
 }
 
-#plot-container {
+#plot-screen {
     grid-size: 2;
     grid-gutter: 1 2;
     grid-rows: 1fr 3;
@@ -42,4 +42,7 @@ StatisticsScreen {
     height: 80%;
     border: thick $background 80%;
     background: $surface;
+}
+
+#plot-container {
 }
