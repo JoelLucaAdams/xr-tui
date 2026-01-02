@@ -151,8 +151,7 @@ class XarrayTUI(App):
         self.title = "xr-tui"
         self.theme = "monokai"
         self.group = group
-        print(path_list)
-        print(type(path_list))
+
         self.paths = [Path(p).resolve() for p in path_list]
 
         if len(self.paths) == 1:
