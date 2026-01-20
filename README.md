@@ -42,16 +42,16 @@ uv tool install xr-tui
 To start xr-tui, simply run the following command in your terminal:
 
 ```bash
-xr data.nc
+xr <filename>
 ```
 
-This will launch the TUI, allowing you to explore the contents of `data.nc`.
+This will launch the TUI, allowing you to explore the contents of `filename`.
 
 
 You can also specify a particular group within a file to load:
 
 ```bash
-xr data.nc --group summary
+xr <filename> --group summary
 ```
 
 xr-tui also works with remote datasets accessible via HTTP:
