@@ -4,6 +4,8 @@ import argparse
 import os
 import time
 from pathlib import Path
+from typing import Optional
+from urllib.parse import urlparse
 
 import numpy as np
 import xarray as xr
@@ -15,6 +17,12 @@ from textual_plotext import PlotextPlot
 
 from xr_tui.hdf_reader import hdf5_to_datatree
 from xr_tui.plotting import ErrorWidget, Plot1DWidget, Plot2DWidget, PlotNDWidget
+
+
+def is_remote_uri(path: str) -> bool:
+    """Check if a given path is a remote URI."""
+    parsed = urlparse(path)
+    return parsed.scheme not in ("", "file")
 
 
 class StatisticsScreen(Screen):
@@ -146,11 +154,18 @@ class XarrayTUI(App):
         ("l", "cursor_right", "Expand node"),
     ]
 
-    def __init__(self, path_list: list[str], group: str = None, **kwargs) -> None:
+    def __init__(
+        self,
+        path_list: list[str],
+        group: Optional[str] = None,
+        engine: Optional[str] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.title = "xr-tui"
         self.theme = "monokai"
         self.group = group
+        self.engine = engine
 
         self.paths = [Path(p).resolve() for p in path_list]
 
@@ -166,7 +181,7 @@ class XarrayTUI(App):
 
         try:
             self.dataset = xr.open_datatree(
-                path, chunks=None, create_default_indexes=False
+                path, chunks=None, create_default_indexes=False, engine=self.engine
             )
         except ValueError:
             self.dataset = hdf5_to_datatree(path)
@@ -195,6 +210,17 @@ class XarrayTUI(App):
     def _get_file_info(self, file: str) -> dict:
         """Get basic info about the file such as size and format."""
 
+        if is_remote_uri(file):
+            _, file_type = os.path.splitext(file)
+            file_type = file_type.lower() if file_type else "N/A (remote file)"
+            return {
+                "File Size": "N/A (remote file)",
+                "File Type": file_type,
+                "Permissions": "N/A (remote file)",
+                "Created Time": "N/A (remote file)",
+                "Modified Time": "N/A (remote file)",
+            }
+
         if os.path.isdir(file):
             file_size = sum(
                 os.path.getsize(os.path.join(dirpath, filename))
@@ -203,7 +229,12 @@ class XarrayTUI(App):
             )
         else:
             file_size = os.path.getsize(file)
-        file_type = os.path.splitext(file)[1].lower()
+
+        if os.path.isdir(file):
+            file_type = "Directory"
+        else:
+            file_type = os.path.splitext(file)[1].lower()
+
         permissions = oct(os.stat(file).st_mode)[-3:]
         created_time = time.ctime(os.path.getctime(file))
         modified_time = time.ctime(os.path.getmtime(file))
@@ -409,9 +440,15 @@ def main():
         help="Path to a specific group within the dataset.",
         default=None,
     )
+    parser.add_argument(
+        "--engine",
+        type=str,
+        help="The xarray engine to use for opening the dataset.",
+        default=None,
+    )
     args = parser.parse_args()
 
-    app = XarrayTUI(args.path_list, group=args.group)
+    app = XarrayTUI(args.path_list, group=args.group, engine=args.engine)
     app.run()
 
 
