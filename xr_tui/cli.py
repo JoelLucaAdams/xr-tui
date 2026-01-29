@@ -4,6 +4,7 @@ import argparse
 import multiprocessing as mp
 import os
 import time
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -201,13 +202,20 @@ class XarrayTUI(App):
         self.file = f"{parent_dirs[0]}/{self.file_glob}"
         self.file_info = [self._get_file_info(str(path)) for path in paths]
 
-        if self.file_glob.lower() == "*.sdf":
-            import sdf_xarray as sdfxr
+        plugins = entry_points(group="xr_tui.backends")
+        plugins_dict = {p.name: p for p in plugins}
+        plugin = plugins_dict.get(self.file_glob.lower())
 
-            self.dataset = sdfxr.open_mfdatatree(paths)
+        if plugin:
+            backend = plugin.load()
+            self.dataset = backend.open_mfdatatree(self, paths)
         else:
             raise NotImplementedError(
-                "Only sdf-xarray's open_mfdatatree is currently supported."
+                f"No backend found for loading files with the extension '{self.file_glob}'\n"
+                "To install a plugin to support this please run \n"
+                "uv tool install xr-tui --with <package-name>\n"
+                "OR\n"
+                "pipx install xr-tui & pipx inject xr-tui <package-name>"
             )
 
     def _get_file_info(self, file: str) -> dict:
