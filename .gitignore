@@ -214,3 +214,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+*.nc
+*.zarr
+*.h5
+*.hdf
+*.hdf5

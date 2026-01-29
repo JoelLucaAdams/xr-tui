@@ -5,10 +5,15 @@ import xarray as xr
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import RadioButton, RadioSet, Static
 from textual.widget import Widget
-from textual_slider import Slider
+from textual.widgets import RadioButton, RadioSet, Static
 from textual_plotext import PlotextPlot
+from textual_slider import Slider
+
+
+def format_coord_value(val) -> str:
+    """Format a coordinate value as string, with 4 decimal places for numeric values."""
+    return f"{val:.4f}" if isinstance(val, (int, float, np.number)) else str(val)
 
 
 class ErrorWidget(Widget):
@@ -84,14 +89,13 @@ class Plot2DWidget(Widget):
         else:
             y_coords = np.arange(z.shape[0])
 
+        x_ticks = [format_coord_value(val) for val in x_coords]
+        y_ticks = [format_coord_value(val) for val in y_coords]
+
         plot_widget = PlotextPlot(id="plot-container")
         plot_widget.plt.matrix_plot(z.tolist())
-        plot_widget.plt.xticks(
-            np.arange(len(x_coords)), labels=[f"{val:.4f}" for val in x_coords]
-        )
-        plot_widget.plt.yticks(
-            np.arange(len(y_coords)), labels=[f"{val:.4f}" for val in y_coords]
-        )
+        plot_widget.plt.xticks(np.arange(len(x_coords)), labels=x_ticks)
+        plot_widget.plt.yticks(np.arange(len(y_coords)), labels=y_ticks)
 
         xunit = self.variable.coords[x_dim_name].attrs.get("units", "")
         yunit = self.variable.coords[y_dim_name].attrs.get("units", "")
@@ -270,10 +274,12 @@ class PlotNDWidget(Widget):
         plot_widget = PlotextPlot(id="plot-widget")
         plot_widget.plt.matrix_plot(z.tolist())
         plot_widget.plt.xticks(
-            np.arange(len(x_coords)), labels=[f"{val:.4f}" for val in x_coords]
+            np.arange(len(x_coords)),
+            labels=[format_coord_value(val) for val in x_coords],
         )
         plot_widget.plt.yticks(
-            np.arange(len(y_coords)), labels=[f"{val:.4f}" for val in y_coords]
+            np.arange(len(y_coords)),
+            labels=[format_coord_value(val) for val in y_coords],
         )
 
         unit = sliced_var.coords[y_dim_name].attrs.get("units", "")

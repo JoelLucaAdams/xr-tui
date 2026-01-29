@@ -1,6 +1,6 @@
 [project]
 name = "xr-tui"
-version = "2025.2.0"
+version = "0.1.0"
 requires-python = ">=3.11"
 description = "A Textual User Interface (TUI) for exploring xarray Datasets."
 license = {text = "MIT"}
@@ -21,6 +21,7 @@ classifiers = [
 
 dependencies = [
     "fsspec[s3]>=2025.10.0",
+    "h5py>=3.15.1",
     "scipy>=1.13.1",
     "textual>=6.7.1",
     "textual-plotext>=1.0.1",
