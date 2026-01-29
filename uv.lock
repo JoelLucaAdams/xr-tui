@@ -2223,10 +2223,11 @@ io = [
 
 [[package]]
 name = "xr-tui"
-version = "2025.1.0"
+version = "2025.2.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fsspec", extra = ["s3"] },
+    { name = "h5py" },
     { name = "scipy" },
     { name = "textual" },
     { name = "textual-plotext" },
@@ -2247,6 +2248,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fsspec", extras = ["s3"], specifier = ">=2025.10.0" },
+    { name = "h5py", specifier = ">=3.15.1" },
     { name = "scipy", specifier = ">=1.13.1" },
     { name = "textual", specifier = ">=6.7.1" },
     { name = "textual-plotext", specifier = ">=1.0.1" },

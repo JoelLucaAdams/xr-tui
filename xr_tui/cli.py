@@ -1,6 +1,7 @@
 """A Textual TUI for exploring netcdf and zarr datasets."""
 
 import argparse
+import multiprocessing as mp
 import os
 import time
 from pathlib import Path
@@ -17,6 +18,8 @@ from textual_plotext import PlotextPlot
 
 from xr_tui.hdf_reader import hdf5_to_datatree
 from xr_tui.plotting import ErrorWidget, Plot1DWidget, Plot2DWidget, PlotNDWidget
+
+mp.set_start_method("fork")
 
 
 def is_remote_uri(path: str) -> bool:
