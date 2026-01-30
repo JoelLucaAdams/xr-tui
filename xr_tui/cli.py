@@ -263,7 +263,7 @@ class XarrayTUI(App):
         # NOTE This is hardcoded to find the second node which should be the
         # "Root" node. It may need changing if the above code changes node ordering
         attributes_node = tree.root.children[1].add(
-            f"Attributes ([blue]{num_attributes}[/blue])"
+            f"Attributes ([blue]{num_attributes}[/blue])", before=0
         )
         self._add_attributes_node(attributes_node, self.dataset.attrs)
 
