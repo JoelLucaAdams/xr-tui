@@ -4,6 +4,7 @@ import argparse
 import multiprocessing as mp
 import os
 import time
+from collections.abc import Mapping
 from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Optional
@@ -293,7 +294,9 @@ class XarrayTUI(App):
                 file_info_list_node = file_list_node.add(self.paths[i].name)
                 self._add_leaf_items(file_info_list_node, file)
 
-        def add_group_node(parent_node: Tree, group, group_name: str = "") -> None:
+        def add_group_node(
+            parent_node: Tree, group: xr.DataTree, group_name: str = ""
+        ) -> None:
             """Recursively add group nodes to the tree."""
             num_vars = len(group.data_vars)
             num_coords = len(group.coords)
@@ -315,12 +318,29 @@ class XarrayTUI(App):
 
         add_group_node(tree.root, self.dataset)
 
+        num_attributes = len(self.dataset.attrs)
+        # NOTE This is hardcoded to find the second node which should be the
+        # "Root" node. It may need changing if the above code changes node ordering
+        attributes_node = tree.root.children[1].add(
+            f"Attributes ([blue]{num_attributes}[/blue])", before=0
+        )
+        self._add_attributes_node(attributes_node, self.dataset.attrs)
+
         yield tree
 
     def _add_leaf_items(self, parent_node: Tree, iterator: dict) -> None:
         """Helper method to add dictionary items to a node's leaf."""
         for key, value in iterator.items():
             parent_node.add_leaf(f"[yellow]{key}[/]: {value}")
+
+    def _add_attributes_node(self, parent_node: Tree, attributes: dict) -> None:
+        """Recursively add global attributes to File Information node."""
+        for key, value in attributes.items():
+            if isinstance(value, Mapping):
+                attr_node = parent_node.add(f"{key}")
+                self._add_attributes_node(attr_node, value)
+            else:
+                parent_node.add_leaf(f"[yellow]{key}[/yellow]: {value}")
 
     def _add_dims_node(self, parent_node: Tree, group) -> None:
         """Helper method to add dimension nodes to the tree."""
