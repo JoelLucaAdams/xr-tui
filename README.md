@@ -9,17 +9,21 @@
 ![PyPI - Status](https://img.shields.io/pypi/v/xr-tui)
 
 
-xr-tui is an interactive terminal user interface (TUI) for exploring and visualizing multi-dimensional datasets. It uses xarray to support loading NetCDF, Zarr, and HDF5 tree structures, and provides a user-friendly interface for data exploration directly in the terminal.
+xr-tui is an interactive terminal user interface (TUI) for exploring and visualizing multi-dimensional datasets. It uses xarray to support loading NetCDF, Zarr and HDF5 tree structures, and provides a user-friendly interface for data exploration directly in the terminal.
 
 ![](demo.gif)
 
 ## Features
-- Interactive navigation through NetCDF, Zarr, [NeXus](https://www.nexusformat.org/) and HDF5 datasets.
+- Interactive navigation through NetCDF, Zarr, and HDF5 datasets.
 - Visualization of 1D and 2D data using plotext for terminal-based plotting.
 - Support for slicing multi-dimensional data.
 - Easy-to-use command-line interface.
 - Displays dataset statistics and metadata.
 - Handles HDF5 files not formatted as xarray datasets.
+
+## Domain Specific Formats
+xr-tui additionally supports domain specific formats such as the HDF5 [NeXus](https://www.nexusformat.org/) format along with any custom xarray backends that supports datatrees. The list of actively supported xarray backends is as follows:
+- [sdf-xarray](https://sdf-xarray.readthedocs.io/en/latest/index.html) -  Used for loading the Particle-in-Cell code [EPOCH](https://epochpic.github.io/)'s output files.
 
 ## Installation
 You can install xr-tui via pip:
@@ -38,17 +42,16 @@ uv tool install xr-tui
 To start xr-tui, simply run the following command in your terminal:
 
 ```bash
-xr data.nc
+xr <filename>
 ```
 
-This will launch the TUI, allowing you to explore the contents of `data.nc`.
+This will launch the TUI, allowing you to explore the contents of `filename`.
 
-xr-tui supports various file formats compatible with xarray, including NetCDF, Zarr, and HDF5.
 
 You can also specify a particular group within a file to load:
 
 ```bash
-xr data.nc --group summary
+xr <filename> --group summary
 ```
 
 xr-tui also works with remote datasets accessible via HTTP:
@@ -56,7 +59,6 @@ xr-tui also works with remote datasets accessible via HTTP:
 ```bash
 xr http://example.com/data.zarr
 ```
-
 
 ## Key Command Reference
 
