@@ -4,6 +4,9 @@ import argparse
 import multiprocessing as mp
 import os
 import time
+from collections.abc import Mapping
+from importlib.metadata import entry_points
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -158,7 +161,7 @@ class XarrayTUI(App):
 
     def __init__(
         self,
-        file: str,
+        path_list: list[str],
         group: Optional[str] = None,
         engine: Optional[str] = None,
         **kwargs,
@@ -166,22 +169,57 @@ class XarrayTUI(App):
         super().__init__(**kwargs)
         self.title = "xr-tui"
         self.theme = "monokai"
-
-        self.file = file
         self.group = group
         self.engine = engine
-        self.file_info = self._get_file_info(file)
+
+        self.paths = [Path(p).resolve() for p in path_list]
+
+        if len(self.paths) == 1:
+            self._init_single_file(self.paths[0])
+        else:
+            self._init_multi_file(self.paths)
+
+    def _init_single_file(self, path: Path) -> None:
+        """Load single file xarray or HDF5 datatree"""
+        self.file = str(Path(path).resolve())
+        self.file_info = self._get_file_info(self.file)
 
         try:
-            dataset = xr.open_datatree(
-                file, chunks=None, create_default_indexes=False, engine=engine
+            self.dataset = xr.open_datatree(
+                path, chunks=None, create_default_indexes=False, engine=self.engine
             )
         except ValueError:
-            dataset = hdf5_to_datatree(file)
+            self.dataset = hdf5_to_datatree(path)
 
-        self.dataset = dataset
+    def _init_multi_file(self, paths: list[Path]) -> None:
+        """Load multi file xarray datatree"""
+        parent_dirs = list({p.parent for p in paths})
+        file_suffixes = list({p.suffix for p in paths})
 
-    def _get_file_info(self, file: str) -> None:
+        if len(parent_dirs) > 1 or len(file_suffixes) > 1:
+            raise ValueError("All files must share the same directory and extension.")
+
+        self.file_glob = f"*{file_suffixes[0]}"
+        self.file = f"{parent_dirs[0]}/{self.file_glob}"
+        self.file_info = [self._get_file_info(str(path)) for path in paths]
+
+        plugins = entry_points(group="xr_tui.backends")
+        plugins_dict = {p.name: p for p in plugins}
+        plugin = plugins_dict.get(self.file_glob.lower())
+
+        if plugin:
+            backend = plugin.load()
+            self.dataset = backend.open_mfdatatree(self, paths)
+        else:
+            raise NotImplementedError(
+                f"No backend found for loading files with the extension '{self.file_glob}'\n"
+                "To install a plugin to support this please run \n"
+                "uv tool install xr-tui --with <package-name>\n"
+                "OR\n"
+                "pipx install xr-tui & pipx inject xr-tui <package-name>"
+            )
+
+    def _get_file_info(self, file: str) -> dict:
         """Get basic info about the file such as size and format."""
 
         if is_remote_uri(file):
@@ -212,14 +250,26 @@ class XarrayTUI(App):
         permissions = oct(os.stat(file).st_mode)[-3:]
         created_time = time.ctime(os.path.getctime(file))
         modified_time = time.ctime(os.path.getmtime(file))
-        file_info = {
+        return {
             "File Size": self._convert_nbytes_to_readable(file_size),
             "File Type": file_type,
             "Permissions": permissions,
             "Created Time": created_time,
             "Modified Time": modified_time,
         }
-        return file_info
+
+    def _get_file_summary_info(self, paths: list[Path], file_glob: str) -> dict:
+        """Get summary information about the files"""
+        total_file_size = sum(os.path.getsize(file) for file in paths)
+        first_created_time = time.ctime(os.path.getctime(paths[0]))
+        last_created_time = time.ctime(os.path.getctime(paths[-1]))
+        return {
+            "File Glob": file_glob,
+            "Total Files Loaded": len(paths),
+            "Total Files Size": self._convert_nbytes_to_readable(total_file_size),
+            "First File Created": first_created_time,
+            "Last File Created": last_created_time,
+        }
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -231,10 +281,22 @@ class XarrayTUI(App):
         # add file info as first child
         file_info_node = tree.root.add("File Information")
         file_info_node.expand()
-        for key, value in self.file_info.items():
-            file_info_node.add_leaf(f"[yellow]{key}[/]: {value}")
 
-        def add_group_node(parent_node: Tree, group, group_name: str = "") -> None:
+        if not hasattr(self, "file_glob"):
+            self._add_leaf_items(file_info_node, self.file_info)
+
+        elif hasattr(self, "file_glob"):
+            file_summary = self._get_file_summary_info(self.paths, self.file_glob)
+            self._add_leaf_items(file_info_node, file_summary)
+
+            file_list_node = file_info_node.add("Individual File Information")
+            for i, file in enumerate(self.file_info):
+                file_info_list_node = file_list_node.add(self.paths[i].name)
+                self._add_leaf_items(file_info_list_node, file)
+
+        def add_group_node(
+            parent_node: Tree, group: xr.DataTree, group_name: str = ""
+        ) -> None:
             """Recursively add group nodes to the tree."""
             num_vars = len(group.data_vars)
             num_coords = len(group.coords)
@@ -256,7 +318,29 @@ class XarrayTUI(App):
 
         add_group_node(tree.root, self.dataset)
 
+        num_attributes = len(self.dataset.attrs)
+        # NOTE This is hardcoded to find the second node which should be the
+        # "Root" node. It may need changing if the above code changes node ordering
+        attributes_node = tree.root.children[1].add(
+            f"Attributes ([blue]{num_attributes}[/blue])", before=0
+        )
+        self._add_attributes_node(attributes_node, self.dataset.attrs)
+
         yield tree
+
+    def _add_leaf_items(self, parent_node: Tree, iterator: dict) -> None:
+        """Helper method to add dictionary items to a node's leaf."""
+        for key, value in iterator.items():
+            parent_node.add_leaf(f"[yellow]{key}[/]: {value}")
+
+    def _add_attributes_node(self, parent_node: Tree, attributes: dict) -> None:
+        """Recursively add global attributes to File Information node."""
+        for key, value in attributes.items():
+            if isinstance(value, Mapping):
+                attr_node = parent_node.add(f"{key}")
+                self._add_attributes_node(attr_node, value)
+            else:
+                parent_node.add_leaf(f"[yellow]{key}[/yellow]: {value}")
 
     def _add_dims_node(self, parent_node: Tree, group) -> None:
         """Helper method to add dimension nodes to the tree."""
@@ -289,8 +373,7 @@ class XarrayTUI(App):
 
         num_attributes = len(var.attrs)
         attr_node = var_node.add(f"Attributes ([blue]{num_attributes}[/blue])")
-        for attr, value in var.attrs.items():
-            attr_node.add_leaf(f"[yellow]{attr}[/]: {value}")
+        self._add_leaf_items(attr_node, var.attrs)
 
     def _convert_nbytes_to_readable(self, nbytes: int) -> str:
         """Convert bytes to a human-readable format."""
@@ -376,7 +459,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="A Textual TUI for managing xarray Datasets."
     )
-    parser.add_argument("file", type=str, help="Path to the xarray Dataset file.")
+    parser.add_argument(
+        "path_list",
+        type=str,
+        nargs="+",
+        help="Path to the xarray Dataset file(s).",
+    )
     parser.add_argument(
         "--group",
         type=str,
@@ -391,7 +479,7 @@ def main():
     )
     args = parser.parse_args()
 
-    app = XarrayTUI(args.file, group=args.group, engine=args.engine)
+    app = XarrayTUI(args.path_list, group=args.group, engine=args.engine)
     app.run()
 
 
